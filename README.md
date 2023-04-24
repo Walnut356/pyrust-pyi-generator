@@ -1,0 +1,1 @@
+# pyrust-pyi-generator
