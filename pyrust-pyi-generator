@@ -1,0 +1,43 @@
+import re
+import os
+
+DATA_TYPES = {
+    rb"mut\s": b"",
+    rb"(String)|(&str)": b"str",
+    rb"((?:u|i)\d+)": b"int",
+    rb"((?:f)\d+)": b"float",
+    rb"\[": b"list[",
+    rb"Option<": b"Optional[",
+    rb"HashSet<": b"set[",
+    rb"(?<=\w)>": b"]",
+    rb"&": b"",
+    rb"Vec<": b"list[",
+    rb"HashMap<": b"dict[",
+}
+
+
+def write_pyi( lib_path: os.PathLike, lib_name: str):
+    with open(lib_path, "rb") as file:
+        functions = re.finditer(
+            rb"((///.*\s)*)#\[pyfunction.*\s*(?:\w+\s+)*?(?:#\[pyo3.*)?\s*(?:\w+\s+)*?fn\s+([\w0-9]+)(\(.*)\s{",
+            file.read(),
+            re.MULTILINE,
+        )
+
+    with open(lib_name + ".pyi", "wb") as file:
+        file.write(b"from typing import Optional\n\n")
+        for func in functions:
+            signature = b"def " + func.group(3) + func.group(4) + b":\n"
+            for key, value in DATA_TYPES.items():
+                signature = re.sub(key, value, signature)
+            file.write(signature)
+            comments = re.findall(rb"(?<=///)(.*?\n)", func.group(1), re.MULTILINE)
+            for i, line in enumerate(comments):
+                if i == 0:
+                    line = b'    """' + line
+                else:
+                    line = b"    " + line
+                if i == len(comments) - 1:
+                    line = line + b'    """\n'
+                file.write(line)
+            file.write(b"    ...\n")
