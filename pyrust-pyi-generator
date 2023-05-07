@@ -13,13 +13,20 @@ DATA_TYPES = {
     rb"&": b"",
     rb"Vec<": b"list[",
     rb"HashMap<": b"dict[",
+    rb";\d": b"",
 }
 
 
-def write_pyi( lib_path: os.PathLike, lib_name: str):
+def write_pyi(lib_path: os.PathLike, lib_name: str):
     with open(lib_path, "rb") as file:
         functions = re.finditer(
             rb"((///.*\s)*)#\[pyfunction.*\s*(?:\w+\s+)*?(?:#\[pyo3.*)?\s*(?:\w+\s+)*?fn\s+([\w0-9]+)(\(.*)\s{",
+            file.read(),
+            re.MULTILINE,
+        )
+        file.seek(0)
+        structs = re.finditer(
+            rb"((?:///.*\s)*)#\[pyclass]\s*(?:\w+\s+)*?(?:struct|enum)\s+([\w0-9]+)\s{\n((?:.*\n)*)",
             file.read(),
             re.MULTILINE,
         )
@@ -31,8 +38,9 @@ def write_pyi( lib_path: os.PathLike, lib_name: str):
             for key, value in DATA_TYPES.items():
                 signature = re.sub(key, value, signature)
             file.write(signature)
-            comments = re.findall(rb"(?<=///)(.*?\n)", func.group(1), re.MULTILINE)
+            comments = re.findall(rb"(?<=///\s)(.*?\n)", func.group(1), re.MULTILINE)
             for i, line in enumerate(comments):
+                line = line.strip(b"/// ")
                 if i == 0:
                     line = b'    """' + line
                 else:
@@ -40,4 +48,18 @@ def write_pyi( lib_path: os.PathLike, lib_name: str):
                 if i == len(comments) - 1:
                     line = line + b'    """\n'
                 file.write(line)
-            file.write(b"    ...\n")
+            file.write(b"    ...\n\n")
+
+        for struct in structs:
+            signature = b"class " + struct.group(2) + b":\n"
+            file.write(signature)
+            comments = struct.group(1).splitlines(keepends=True)
+            for i, line in enumerate(comments):
+                line = line.strip(b"/// ")
+                if i == 0:
+                    line = b'    """' + line
+                else:
+                    line = b"    " + line
+                if i == len(comments) - 1:
+                    line = line + b'    """\n'
+                file.write(line)
